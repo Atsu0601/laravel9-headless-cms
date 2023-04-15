@@ -1,0 +1,76 @@
+# Compose fileのバージョン指定
+version: '3'
+
+# どんなコンテナを立ち上げるかを設定
+services:
+  # ---------------------------------
+  # laravelを動かすappコンテナ
+  # ---------------------------------
+  app:
+    # どのポートを開いて繋ぐか。下記ではホストの81番ポートからコンテナの80番ポートにつなぐ
+    ports:
+      # Laravelのポート
+      - "81:80"
+      # Viteの開発用ポート
+      - 5173:5173
+
+    # dockerfileで作成したイメージを元にコンテナをビルドするということ
+    build: ./docker/app
+    # コンテナの名前を別途指定
+    container_name: headless-cms-app
+    # volumeの設定。ローカルの./srcディレクトリからコンテナ内のアプリへアクセスできる様になる。
+    volumes:
+      - ./src:/var/www/html
+
+  # ----------------------------------
+  # MySQLを動かすコンテナ
+  # ----------------------------------
+  db:
+    # Docker HubからMySQL最新版の公式イメージをダウンロードしてくる指定
+    image: mysql:8.0.30
+    container_name: headless-cms-db
+
+    # コンテナ内の環境変数を指定
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: pass
+      TZ: 'Asia/Tokyo'
+
+    # 起動時のコマンド
+    command: mysqld --character-set-server=utf8 --collation-server=utf8_unicode_ci
+    # MySQL設定ファイルと生成されるデータをローカル上にも同期
+    # これをすることで、コンテナを消してもローカル上にはデータが残る
+    volumes:
+      - ./docker/db/var/lib/mysql
+      - ./docker/db/my.cnf:/etc/mysql/conf.d/my.cnf
+    ports:
+      - 3307:3306
+  
+  # ----------------------------------
+  # PHP MyAdminを動かすコンテナ
+  # ----------------------------------
+  phpmyadmin:
+    # Docker Hubからイメージをダウンロード
+    image: phpmyadmin/phpmyadmin:5.2.0
+
+    # コンテナの名前
+    container_name: headless-cms-phpmyadmin
+
+    # コンテナと他のサービスを繋げる
+    links:
+      - db
+
+    # localhost:8080 で phpmyadmin の管理画面にアクセス
+    ports:
+      - 8080:80
+
+    # セッション情報をボリュームに設定することで永続化できる
+    volumes:
+      - ./docker/phpmyadmin/sessions
+
+# 同じネットワークに接続するよう定義
+networks:
+  app:
+    driver: bridge
